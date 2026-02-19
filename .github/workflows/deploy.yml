@@ -58,13 +58,34 @@ jobs:
     needs: build_and_push
 
     steps:
+      - name: Validate required secrets
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          required=(SSH_HOST SSH_USER SSH_PRIVATE_KEY GHCR_USERNAME GHCR_TOKEN)
+          for name in "${required[@]}"; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error title=Missing secret::Secret '$name' is not set."
+              exit 1
+            fi
+          done
+
       - name: Deploy to server over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          port: ${{ secrets.SSH_PORT || '22' }}
           script: |
             set -e
 
