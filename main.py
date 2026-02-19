@@ -22,7 +22,9 @@ CITY_TIMEZONES = {
 def healthcheck() -> dict[str, str]:
     return {
         "status": "ok",
-        "message": "Use /time/{city} or /convert-timezone to work with time.",
+        "message": (
+            "Use /time/{city}, /date/{city}, or /convert-timezone to work with time."
+        ),
     }
 
 
@@ -45,6 +47,28 @@ def get_city_time(city: str) -> dict[str, str]:
         "city": city,
         "timezone": timezone_name,
         "current_time": current_time.isoformat(),
+    }
+
+
+@app.get("/date/{city}")
+def get_city_date(city: str) -> dict[str, str]:
+    normalized_city = city.strip().lower()
+    timezone_name = CITY_TIMEZONES.get(normalized_city)
+
+    if timezone_name is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"City '{city}' is not supported. "
+                "Try: Moscow, London, New York, Tokyo."
+            ),
+        )
+
+    current_date = datetime.now(ZoneInfo(timezone_name)).date()
+    return {
+        "city": city,
+        "timezone": timezone_name,
+        "current_date": current_date.isoformat(),
     }
 
 
