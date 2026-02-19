@@ -86,19 +86,66 @@ jobs:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+          SSH_PASSPHRASE: ${{ secrets.SSH_PASSPHRASE }}
         run: |
           set -euo pipefail
+
+          echo "== SSH diagnostic =="
+          echo "Host: $SSH_HOST"
+          echo "Port: $SSH_PORT"
+          echo "User: $SSH_USER"
+
+          echo "== DNS resolution =="
+          getent hosts "$SSH_HOST" || echo "DNS lookup failed for $SSH_HOST"
+
+          echo "== TCP port probe =="
+          if timeout 5 bash -c "</dev/tcp/$SSH_HOST/$SSH_PORT"; then
+            echo "TCP connectivity: ok"
+          else
+            echo "::warning title=Network issue::Cannot open TCP connection to $SSH_HOST:$SSH_PORT"
+          fi
+
           mkdir -p "$HOME/.ssh"
           printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/gha_deploy_key"
           chmod 600 "$HOME/.ssh/gha_deploy_key"
 
-          ssh -vvv \
-            -i "$HOME/.ssh/gha_deploy_key" \
-            -p "$SSH_PORT" \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            -o BatchMode=yes \
-            "$SSH_USER@$SSH_HOST" "echo ssh-auth-ok"
+          echo "== Private key format check =="
+          if ssh-keygen -y -f "$HOME/.ssh/gha_deploy_key" >/dev/null 2>&1; then
+            echo "Private key format: valid"
+          else
+            echo "::warning title=Key format issue::SSH_PRIVATE_KEY format is invalid or passphrase-protected."
+          fi
+
+          echo "== Public key fingerprint =="
+          ssh-keygen -lf "$HOME/.ssh/gha_deploy_key" || true
+
+          echo "== SSH auth test =="
+          set +e
+          if [ -n "${SSH_PASSPHRASE:-}" ]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq sshpass
+            sshpass -p "$SSH_PASSPHRASE" ssh -vvv \
+              -i "$HOME/.ssh/gha_deploy_key" \
+              -p "$SSH_PORT" \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o BatchMode=no \
+              "$SSH_USER@$SSH_HOST" "echo ssh-auth-ok"
+          else
+            ssh -vvv \
+              -i "$HOME/.ssh/gha_deploy_key" \
+              -p "$SSH_PORT" \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o BatchMode=yes \
+              "$SSH_USER@$SSH_HOST" "echo ssh-auth-ok"
+          fi
+          SSH_EXIT=$?
+          set -e
+
+          if [ "$SSH_EXIT" -ne 0 ]; then
+            echo "::warning title=SSH auth failed::See verbose ssh output above for exact reason."
+          fi
 
       - name: Deploy to server over SSH
         uses: appleboy/ssh-action@v1.2.0
