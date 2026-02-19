@@ -20,7 +20,10 @@ CITY_TIMEZONES = {
 
 @app.get("/")
 def healthcheck() -> dict[str, str]:
-    return {"status": "ok", "message": "Use /time/{city} to get city time."}
+    return {
+        "status": "ok",
+        "message": "Use /time/{city} or /convert-timezone to work with time.",
+    }
 
 
 @app.get("/time/{city}")
@@ -42,4 +45,46 @@ def get_city_time(city: str) -> dict[str, str]:
         "city": city,
         "timezone": timezone_name,
         "current_time": current_time.isoformat(),
+    }
+
+
+@app.get("/convert-timezone")
+def convert_timezone(
+    current_time: str,
+    from_timezone: str,
+    to_timezone: str,
+) -> dict[str, str]:
+    try:
+        source_tz = ZoneInfo(from_timezone)
+        target_tz = ZoneInfo(to_timezone)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid timezone. Example: Europe/Moscow, America/New_York.",
+        ) from exc
+
+    try:
+        parsed_time = datetime.fromisoformat(current_time)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Invalid time format. Use ISO format, for example: "
+                "2026-02-19T15:30:00"
+            ),
+        ) from exc
+
+    # If input datetime has no offset/timezone, we treat it as time in from_timezone.
+    if parsed_time.tzinfo is None:
+        parsed_time = parsed_time.replace(tzinfo=source_tz)
+    else:
+        parsed_time = parsed_time.astimezone(source_tz)
+
+    converted = parsed_time.astimezone(target_tz)
+
+    return {
+        "source_time": parsed_time.isoformat(),
+        "source_timezone": from_timezone,
+        "target_timezone": to_timezone,
+        "converted_time": converted.isoformat(),
     }
