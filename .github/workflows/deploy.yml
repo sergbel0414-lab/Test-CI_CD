@@ -78,6 +78,28 @@ jobs:
             fi
           done
 
+      - name: Debug SSH authentication (verbose)
+        shell: bash
+        continue-on-error: true
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/gha_deploy_key"
+          chmod 600 "$HOME/.ssh/gha_deploy_key"
+
+          ssh -vvv \
+            -i "$HOME/.ssh/gha_deploy_key" \
+            -p "$SSH_PORT" \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o BatchMode=yes \
+            "$SSH_USER@$SSH_HOST" "echo ssh-auth-ok"
+
       - name: Deploy to server over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
