@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException
 
-app = FastAPI(title="City Time API", version="1.0.0")
+app = FastAPI(title="City Time API", version="1.0.1")
 
 # Небольшой словарь тестовых городов и соответствующих часовых поясов.
 CITY_TIMEZONES = {
